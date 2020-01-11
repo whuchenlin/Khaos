@@ -1,0 +1,22 @@
+deeplabv3+ 
+[Training] acc: 0.9885, PC: 0.9399, SP: 0.9938, SE: 0.9356, F1: 0.9376, IOU: 0.8830, DC: 0.9376
+[Validation] Acc: 0.9374, PC: 0.6994, SP: 0.9572, SE: 0.7812, F1: 0.7358, JS: 0.5834, DC: 0.7358
+Best DeepLabV3Plus Model IOU : 0.5834; Best epoch : 94
+resunet
+[Training] acc: 0.9889, PC: 0.9375, SP: 0.9939, SE: 0.9339, F1: 0.9355, IOU: 0.8801, DC: 0.9355
+[Validation] Acc: 0.9364, PC: 0.7226, SP: 0.9650, SE: 0.7100, F1: 0.7117, JS: 0.5546, DC: 0.7117
+Best U_Net Model IOU : 0.5546; Best epoch : 88
+Epoch [150/150], Loss: 3.1353, 
+[Training] acc: 0.9957, PC: 0.9766, SP: 0.9976, SE: 0.9758, F1: 0.9762, IOU: 0.9538, DC: 0.9762
+Decay learning rate to lr: -2.981555974335137e-19.
+[Validation] Acc: 0.9370, PC: 0.7659, SP: 0.9745, SE: 0.6447, F1: 0.6922, JS: 0.5328, DC: 0.6922
+DDnet
+Epoch [111/150], Loss: 7.6319, 
+[Training] acc: 0.9862, PC: 0.9269, SP: 0.9926, SE: 0.9204, F1: 0.9232, IOU: 0.8587, DC: 0.9232
+Decay learning rate to lr: 0.00065.
+[Validation] Acc: 0.9452, PC: 0.7505, SP: 0.9673, SE: 0.7715, F1: 0.7585, JS: 0.6124, DC: 0.7585
+Best DD_Net Model IOU : 0.6124; Best epoch : 110
+Epoch [150/150], Loss: 4.8002, 
+[Training] acc: 0.9911, PC: 0.9530, SP: 0.9952, SE: 0.9500, F1: 0.9515, IOU: 0.9078, DC: 0.9515
+Decay learning rate to lr: -2.981555974335137e-19.
+[Validation] Acc: 0.9448, PC: 0.7604, SP: 0.9698, SE: 0.7495, F1: 0.7523, JS: 0.6045, DC: 0.7523
