@@ -7,11 +7,16 @@ from evaluation import *
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
 from module.models import danet
 from deeplabv3plus import deeplab
+from fcn import fcn
 from torchsummary import summary
 import visualization as visual
 import csv
 import tifffile as tif
 import cv2
+from fcn.fcn import VGGNet, FCN32,FCN16,FCN8
+from data_processing import readfilename
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 class Solver(object):
 	def __init__(self, config, train_loader, valid_loader, test_loader):
@@ -57,19 +62,31 @@ class Solver(object):
 	def build_model(self):
 		"""Build generator and discriminator."""
 		if   self.model_type =='U_Net':
+			 # self.unet = U_Net(img_ch=3,output_ch=self.output_ch)
 			 self.unet = torch.nn.DataParallel(U_Net(img_ch=3,output_ch=self.output_ch),device_ids=[0])
 		elif self.model_type =='R2U_Net':
 			 self.unet = R2U_Net(img_ch=3,output_ch=self.output_ch,t=self.t)
 		elif self.model_type =='AttU_Net':
 			 self.unet = AttU_Net(img_ch=3,output_ch=self.output_ch)
 		elif self.model_type == 'R2AttU_Net':
-			 self.unet = R2AttU_Net(img_ch=3,output_ch=self.output_ch,t=self.t)
+			 # self.unet = R2AttU_Net(img_ch=3,output_ch=self.output_ch,t=self.t)
+			 self.unet = torch.nn.DataParallel(R2AttU_Net(img_ch=3,output_ch=self.output_ch,t=self.t),device_ids=[0,1,2])
 		elif self.model_type == 'DA_Net':
-			 self.unet = danet.DANet(nclass=1, backbone='resnet50')
+			 # self.unet = danet.DANet(nclass=1, backbone='resnet50')
+			 self.unet = torch.nn.DataParallel(danet.DANet(nclass=1, backbone='resnet101'),
+											   device_ids=[0, 1, 2])
 		elif self.model_type == 'DD_Net':
-			 self.unet = torch.nn.DataParallel(danet.DDNet(nclass=1, backbone='resnet101'),device_ids=[0,1])
+			 # self.unet = danet.DDNet(nclass=1, backbone='resnet50')
+			 self.unet = torch.nn.DataParallel(danet.DDNet(nclass=1, backbone='resnet101'),
+											   device_ids=[0,1])
 		elif self.model_type == 'DeepLabV3Plus':
-			 self.unet = torch.nn.DataParallel(deeplab.DeepLab(num_classes=1, backbone='resnet'),device_ids=[0])
+			 self.unet = torch.nn.DataParallel(deeplab.DeepLab(num_classes=1, backbone='resnet'),
+											  device_ids=[0])
+			 # self.unet = deeplab.DeepLab(num_classes=1, backbone='resnet')
+		elif self.model_type == 'FCN':
+			vgg_model = VGGNet()
+			self.unet = FCN32(pretrained_net=vgg_model, n_class=1)
+			# self.unet = torch.nn.DataParallel(FCN32(pretrained_net=vgg_model, n_class=1), device_ids=[0, 1, 2, 3])
 
 		self.optimizer = optim.Adam(list(self.unet.parameters()), self.lr, [self.beta1, self.beta2])
 		self.unet.to(self.device)
@@ -134,8 +151,7 @@ class Solver(object):
 			DC = 0.  # Dice Coefficient
 			length = 0
 
-			for i, (images, GT) in enumerate(self.train_loader):
-
+			for i, (images, GT, filenames) in enumerate(self.train_loader):
 				images = images.to(self.device)
 				GT = GT.to(self.device)
 
@@ -153,8 +169,6 @@ class Solver(object):
 				loss.backward()
 				self.optimizer.step()
 
-				# 一个batch只做一次精度评定
-				# 所以用影像总数来做平均是错的
 				#  length += images.size(0)
 				acc += get_accuracy(SR_eva, GT)
 				SE += get_sensitivity(SR_eva, GT)
@@ -210,7 +224,7 @@ class Solver(object):
 			JS = 0.  # Jaccard Similarity
 			DC = 0.  # Dice Coefficient
 			length = 0
-			for i, (images, GT) in enumerate(self.valid_loader):
+			for i, (images, GT, filenames) in enumerate(self.valid_loader):
 				images = images.to(self.device)
 				GT = GT.to(self.device)
 				SR = F.sigmoid(self.unet(images))  # 这个其实可以写在模型里
@@ -294,7 +308,7 @@ class Solver(object):
 		JS = 0.  # Jaccard Similarity
 		DC = 0.  # Dice Coefficient
 		length = 0
-		for i, (images, GT) in enumerate(self.test_loader):
+		for i, (images, GT, filenames) in enumerate(self.test_loader):
 			images = images.to(self.device)
 			GT = GT.to(self.device)
 			SR = F.sigmoid(self.unet(images))
@@ -303,27 +317,28 @@ class Solver(object):
 			pre = SR
 			pre[SR >= 0.5] = 255
 			pre[SR < 0.5] = 0
-			pre = pre.data
-			# 把GPU上的数据扒下来放在CPU上才能处理
-			pre = pre.cpu().numpy()[0]
-			pre = np.squeeze(pre).astype(np.uint8)
-			# pre = np.transpose(pre, (1, 2, 0))
-			# filename = readfilename("path_image")
-			filename = i
-			filename = str(filename)
-			tif.imwrite(self.result_path+ "/" + filename + "_pre.tif", pre)
+			pre_ori = pre.data
 
-			pre = GT * 255
-			pre = pre.cpu().numpy()[0]
-			pre = np.squeeze(pre).astype(np.uint8)
-			tif.imwrite(self.result_path + "/" + filename + "_lab.tif", pre)
+			for j in range(pre_ori.shape[0]):
+				# 把GPU上的数据扒下来放在CPU上才能处理
+				pre = pre_ori.cpu().numpy()[j]
+				pre = np.squeeze(pre).astype(np.uint8)
+				# pre = np.transpose(pre, (1, 2, 0))
+				# filename = i * self.batch_size + j
+				# filename = str(filename)
+				tif.imwrite(self.result_path + "/" + filenames[j] + "_pre.tif", pre)
 
-			pre = images * 255
-			pre = pre.cpu().numpy()[0]
-			pre = np.squeeze(pre).astype(np.uint8)
-			pre = np.transpose(pre, (1, 2, 0))
-			tif.imwrite(self.result_path + "/" + filename + "_img.tif", pre)
-			print(self.result_path + "/" + filename + "_img" )
+				# pre = GT * 255
+				# pre = pre.cpu().numpy()[j]
+				# pre = np.squeeze(pre).astype(np.uint8)
+				# tif.imwrite(self.result_path + "/" + filenames + "_lab.tif", pre)
+				#
+				# pre = images * 255
+				# pre = pre.cpu().numpy()[j]
+				# pre = np.squeeze(pre).astype(np.uint8)
+				# pre = np.transpose(pre, (1, 2, 0))
+				# tif.imwrite(self.result_path + "/" + filenames + "_img.tif", pre)
+				print(self.result_path + "/" + filenames[j])
 
 			acc += get_accuracy(SR, GT)
 			SE += get_sensitivity(SR, GT)
